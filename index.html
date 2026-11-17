@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>点数入力アプリ</title>
+<style>
+  :root{--bg:#f4f5f2;--card:#fff;--ink:#1d2421;--sub:#66706b;--line:#dfe3df;--accent:#1f6f5c}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#151917;--card:#1d2220;--ink:#e7ece9;--sub:#9aa59f;--line:#323a36;--accent:#4fb393;color-scheme:dark}}
+  :root[data-theme="dark"]{--bg:#151917;--card:#1d2220;--ink:#e7ece9;--sub:#9aa59f;--line:#323a36;--accent:#4fb393;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic UI","Meiryo","Hiragino Sans",system-ui,sans-serif;line-height:1.7}
+  .wrap{max-width:640px;margin:0 auto;padding:24px 16px}
+  h1{font-size:22px;margin:0 0 16px}
+  a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px;color:var(--ink);text-decoration:none}
+  a.card:hover{border-color:var(--accent)}
+  a.card b{color:var(--accent);font-size:17px}
+  a.card span{display:block;font-size:13.5px;color:var(--sub)}
+  p.note{font-size:13px;color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>点数入力アプリ</h1>
+  <a class="card" href="onsei-saiten.html"><b>音声点数入力</b>
+    <span>「5番、85」と話すと点数が入ります。12段階評価（A+〜D-）にも対応。Chrome / Edge 専用で、音声認識にインターネットを使います。</span></a>
+  <a class="card" href="button-saiten.html"><b>ボタン点数入力</b>
+    <span>番号順にボタンを押して点数や評価を入れます。インターネット接続がなくても使えます。</span></a>
+  <p class="note">入力したデータは、使っているパソコンのブラウザの中にだけ保存されます。どこかへ送信されることはありません（音声版の音声認識を除く）。どちらも Excel に縦1列で貼り付けられる形でコピーできます。</p>
+</div>
+</body>
+</html>

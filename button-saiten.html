@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ボタン点数入力</title>
+<style>
+  [hidden]{display:none!important}
+  body{margin:0;font-size:14px}
+  /* layout: 上に設定バー、左に「いまの番号＋押すボタン」、右に名簿マス目。狭い画面では縦積み */
+  :root{
+    --bg:#f4f5f2; --card:#ffffff; --ink:#1d2421; --sub:#66706b; --line:#dfe3df;
+    --accent:#1f6f5c; --accent-ink:#ffffff; --accent-soft:#e2f0ea;
+    --key:#f7f8f6; --key-hover:#eceee9;
+    --warn:#b3261e; --warn-soft:#fbe9e7; --flash:#fff1b8; --absent:#8a6400; --cursor:#1f6f5c;
+    --font:"Noto Sans JP","Yu Gothic UI","Meiryo","Hiragino Sans",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --bg:#151917; --card:#1d2220; --ink:#e7ece9; --sub:#9aa59f; --line:#323a36;
+    --accent:#4fb393; --accent-ink:#0f1513; --accent-soft:#1f3a31;
+    --key:#252b28; --key-hover:#2e3532;
+    --warn:#f08a80; --warn-soft:#3a2321; --flash:#4a4120; --absent:#e3b84a; --cursor:#4fb393;
+    color-scheme:dark; } }
+  :root[data-theme="dark"]{
+    --bg:#151917; --card:#1d2220; --ink:#e7ece9; --sub:#9aa59f; --line:#323a36;
+    --accent:#4fb393; --accent-ink:#0f1513; --accent-soft:#1f3a31;
+    --key:#252b28; --key-hover:#2e3532;
+    --warn:#f08a80; --warn-soft:#3a2321; --flash:#4a4120; --absent:#e3b84a; --cursor:#4fb393;
+    color-scheme:dark; }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);}
+  .wrap{max-width:1080px;margin:0 auto;padding-block:16px;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+  h1{font-size:20px;margin:0 0 12px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .bar label{font-size:13px;color:var(--sub)}
+  select,input[type=text],input[type=number]{font:inherit;font-size:15px;padding:6px 8px;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;background:var(--card)}
+  input[type=number]{width:68px}
+  button{font:inherit;font-size:14px;padding:7px 12px;border-radius:6px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);cursor:pointer;touch-action:manipulation}
+  button:hover{background:var(--key-hover)}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  button.primary:hover{filter:brightness(1.08)}
+  button.danger{color:var(--warn)}
+  button.danger.armed{background:var(--warn);color:var(--card);border-color:var(--warn)}
+  .spacer{flex:1}
+  .modal{display:none;margin:-4px 0 12px;gap:6px;align-items:center;flex-wrap:wrap}
+  .modal.show{display:flex}
+
+  .main{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:12px;align-items:start}
+  @media (max-width:820px){.main{grid-template-columns:minmax(0,1fr)}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+
+  .now{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .now .navbtn{font-size:22px;width:52px;height:52px;padding:0;border-radius:10px}
+  .now .big{flex:1;text-align:center;background:var(--accent-soft);border-radius:10px;padding:6px 4px}
+  .now .big .lbl{font-size:12px;color:var(--sub)}
+  .now .big .num{font-size:40px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+  .now .big .cur{font-size:13px;color:var(--sub);min-height:1.3em}
+  .now .big.done .num{font-size:24px;padding:8px 0}
+
+  .keys{display:grid;gap:8px}
+  .keys.grade{grid-template-columns:repeat(3,1fr)}
+  .keys.score{grid-template-columns:repeat(4,1fr)}
+  .key{font-size:26px;font-weight:700;padding:0;height:64px;border-radius:10px;background:var(--key);
+    font-variant-numeric:tabular-nums}
+  .key:active{background:var(--accent);color:var(--accent-ink)}
+  .key.hit{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .key .s{font-size:12px;font-weight:500;color:var(--sub);display:block;margin-top:-4px}
+  .key.hit .s{color:inherit}
+  .subkeys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+  .subkeys button{height:48px;font-size:15px;font-weight:600}
+  .subkeys .absent{color:var(--absent)}
+
+  .opts{margin-top:12px;font-size:13px;color:var(--sub);display:flex;flex-direction:column;gap:6px}
+  .help{margin-top:12px;font-size:12.5px;color:var(--sub);line-height:1.7;border-top:1px solid var(--line);padding-top:10px}
+  .help b{color:var(--ink)}
+
+  .gridhead{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .count{font-size:14px;color:var(--sub)}
+  .stats{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;font-size:12px}
+  .stats span{background:var(--key);border-radius:5px;padding:2px 6px;color:var(--sub)}
+  .stats span b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  @media (max-width:460px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .cell{border:1px solid var(--line);border-radius:8px;padding:4px 6px 6px;background:var(--card);position:relative;
+    transition:background .6s;cursor:pointer;text-align:left;min-height:54px;font:inherit;color:var(--ink);width:100%}
+  .cell .n{font-size:12px;color:var(--sub);display:block}
+  .cell .v{font-size:20px;font-weight:600;display:block;text-align:center;min-height:1.3em;font-variant-numeric:tabular-nums}
+  .cell .tag{position:absolute;top:4px;right:6px;font-size:11px;color:var(--absent);font-weight:700}
+  .cell.filled{background:var(--key)}
+  .cell.flash{background:var(--flash);transition:none}
+  .cell.cursor{border:2px solid var(--cursor);padding:3px 5px 5px;box-shadow:0 0 0 2px var(--accent-soft)}
+  .copyfallback{display:none;margin-top:10px}
+  .copyfallback textarea{width:100%;height:120px;font:inherit;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--line)}
+  .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;
+    transition:opacity .2s;pointer-events:none;max-width:calc(100% - 32px)}
+  .toast.show{opacity:1}
+  @media (prefers-reduced-motion: reduce){ .cell,.toast{transition:none} }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="wrap">
+  <h1>ボタン点数入力</h1>
+
+  <div class="bar">
+    <label for="testSel">テスト</label>
+    <select id="testSel"></select>
+    <button id="newBtn">＋新規</button>
+    <button id="renameBtn">名前変更</button>
+    <span class="spacer"></span>
+    <label for="modeSel">種類</label>
+    <select id="modeSel">
+      <option value="grade">12段階（A+〜D-）</option>
+      <option value="score">点数</option>
+    </select>
+    <label for="maxInput" id="maxLbl">満点</label><input id="maxInput" type="number" min="1" max="20">
+    <label for="nInput">人数</label><input id="nInput" type="number" min="1" max="60">
+  </div>
+  <div class="modal" id="nameBox">
+    <input id="nameInput" type="text" placeholder="例：1年1組 小テスト③">
+    <button class="primary" id="nameOk">OK</button>
+    <button id="nameCancel">やめる</button>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <div class="now">
+        <button class="navbtn" id="prevBtn" aria-label="前の番号へ">‹</button>
+        <div class="big" id="nowBox">
+          <div class="lbl">いま入力する番号</div>
+          <div class="num" id="nowNum">1番</div>
+          <div class="cur" id="nowCur"></div>
+        </div>
+        <button class="navbtn" id="nextBtn" aria-label="次の番号へ">›</button>
+      </div>
+
+      <div class="keys" id="keys"></div>
+      <div class="subkeys">
+        <button class="absent" id="absentBtn">欠席</button>
+        <button id="clearCellBtn">空欄に戻す</button>
+        <button id="undoBtn">↶ 取消</button>
+      </div>
+
+      <div class="opts">
+        <label><input type="checkbox" id="skipOpt"> 入力済みの番号は飛ばして進む</label>
+        <label id="numOptWrap"><input type="checkbox" id="numOpt"> 数値でコピー（A+=12 … D-=1）</label>
+      </div>
+
+      <div class="help">
+        ボタンを押すと<b>いまの番号</b>に登録され、次の番号へ進みます。<br>
+        右のマス目を押すと、その番号から入力できます（直し・飛ばし用）。<br>
+        「取り消し」は直前の登録を戻し、その番号に戻ります。<br>
+        <span id="kbHelp"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="gridhead">
+        <span class="count" id="count"></span>
+        <span class="spacer"></span>
+        <button class="primary" id="copyBtn">コピー</button>
+        <button class="danger" id="clearBtn">全消去</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="grid" id="grid"></div>
+      <div class="copyfallback" id="copyFallback">
+        <div style="font-size:13px;color:var(--sub);margin-bottom:4px">自動コピーできませんでした。下を選択して Ctrl+C でコピーしてください。</div>
+        <textarea id="copyText" readonly></textarea>
+      </div>
+      <div class="help">
+        Excelで<b>1番のセル</b>を選んで貼り付けると、1番〜最後の番号まで縦に入ります（未入力は空欄、欠席は「欠」）。<br>
+        データはこのブラウザ内にだけ自動保存されます。
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const KEY = "button-saiten-file:v1";
+  const $ = id => document.getElementById(id);
+  const GRADES = ["A+","A","A-","B+","B","B-","C+","C","C-","D+","D","D-"];
+  const gradeNum = g => 12 - GRADES.indexOf(g);
+
+  // ---------- 保存 ----------
+  let store;
+  const blankTest = () => ({mode:"grade", max:10, n:40, cur:1, copyNum:false, scores:{}});
+  function load(){
+    try{ store = JSON.parse(localStorage.getItem(KEY)); }catch(e){ store = null; }
+    if(!store || !store.tests || !Object.keys(store.tests).length){
+      store = {current:"テスト1", skip:false, tests:{"テスト1":blankTest()}};
+    }
+    if(!store.tests[store.current]) store.current = Object.keys(store.tests)[0];
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  const T = () => store.tests[store.current];
+  const isGrade = () => T().mode === "grade";
+  let history = [];   // {test, no, prev, cur}
+
+  const label = s => !s ? "空欄" : s.a ? "欠席" : (isGrade() ? s.v : `${s.v}点`);
+
+  // ---------- 表示 ----------
+  function renderBar(){
+    const sel = $("testSel"); sel.innerHTML = "";
+    Object.keys(store.tests).forEach(name => {
+      const o = document.createElement("option"); o.value = o.textContent = name;
+      if(name === store.current) o.selected = true; sel.appendChild(o);
+    });
+    const t = T();
+    $("modeSel").value = t.mode; $("nInput").value = t.n; $("maxInput").value = t.max;
+    $("maxInput").hidden = $("maxLbl").hidden = isGrade();
+    $("numOptWrap").hidden = !isGrade();
+    $("numOpt").checked = !!t.copyNum; $("skipOpt").checked = !!store.skip;
+    $("copyBtn").textContent = isGrade() ? "評価をコピー" : "点数をコピー";
+    $("kbHelp").innerHTML = isGrade()
+      ? "PCのキーボード：<b>Q W E</b>=A+ A A-、<b>A S D</b>=B、<b>Z X C</b>=C、<b>1 2 3</b>=D、<b>K</b>=欠席、<b>Backspace</b>=取り消し"
+      : "PCのキーボード：数字キーで点数（2桁は続けて打つ）、<b>K</b>=欠席、<b>Backspace</b>=取り消し";
+  }
+  function renderKeys(){
+    const k = $("keys"); k.innerHTML = "";
+    let vals;
+    if(isGrade()){ k.className = "keys grade"; vals = GRADES; }
+    else{
+      k.className = "keys score";
+      vals = []; for(let v = T().max; v >= 0; v--) vals.push(v);
+    }
+    vals.forEach(v => {
+      const b = document.createElement("button");
+      b.className = "key"; b.dataset.v = v;
+      b.innerHTML = isGrade() ? esc(v) : `${v}<span class="s">点</span>`;
+      b.addEventListener("click", () => enter(isGrade() ? v : Number(v), false));
+      k.appendChild(b);
+    });
+  }
+  function renderGrid(){
+    const g = $("grid"); g.innerHTML = "";
+    for(let i=1;i<=T().n;i++){
+      const c = document.createElement("button");
+      c.className = "cell"; c.id = "c"+i; c.type = "button";
+      c.innerHTML = `<span class="n">${i}番</span><span class="tag"></span><span class="v"></span>`;
+      c.addEventListener("click", () => { T().cur = i; save(); renderCursor(); });
+      g.appendChild(c); paintCell(i);
+    }
+    renderCursor(); updateStats();
+  }
+  function paintCell(i, flash){
+    const c = $("c"+i); if(!c) return;
+    const s = T().scores[i];
+    c.querySelector(".v").textContent = s ? (s.a ? "" : s.v) : "";
+    c.querySelector(".tag").textContent = s && s.a ? "欠" : "";
+    c.classList.toggle("filled", !!s);
+    if(flash){ c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 50); }
+  }
+  function renderCursor(){
+    const t = T();
+    document.querySelectorAll(".cell.cursor").forEach(e => e.classList.remove("cursor"));
+    const box = $("nowBox");
+    if(t.cur > t.n){
+      box.classList.add("done");
+      $("nowNum").textContent = "最後まで入力しました";
+      $("nowCur").textContent = "直すときはマス目を押してください";
+    }else{
+      box.classList.remove("done");
+      $("nowNum").textContent = `${t.cur}番`;
+      const s = t.scores[t.cur];
+      $("nowCur").textContent = s ? `登録済み：${label(s)}（押すと上書き）` : "";
+      const c = $("c"+t.cur);
+      if(c){ c.classList.add("cursor"); c.scrollIntoView({block:"nearest"}); }
+    }
+    document.querySelectorAll(".key").forEach(b => {
+      const s = t.scores[t.cur];
+      b.classList.toggle("hit", !!s && !s.a && String(s.v) === b.dataset.v);
+    });
+  }
+  function updateStats(){
+    const t = T(); let k = 0, absent = 0, sum = 0, cnt = 0; const tally = {};
+    for(let i=1;i<=t.n;i++){
+      const s = t.scores[i]; if(!s) continue; k++;
+      if(s.a){ absent++; continue; }
+      tally[s.v] = (tally[s.v] || 0) + 1;
+      if(!isGrade()){ sum += s.v; cnt++; }
+    }
+    $("count").textContent = `入力済み ${k} / ${t.n}人`;
+    let html;
+    if(isGrade()){
+      html = GRADES.map(g => `<span>${g} <b>${tally[g] || 0}</b></span>`).join("");
+    }else{
+      html = cnt ? `<span>平均 <b>${(sum/cnt).toFixed(1)}</b>点</span>` : "";
+      for(let v = t.max; v >= 0; v--) if(tally[v]) html += `<span>${v}点 <b>${tally[v]}</b></span>`;
+    }
+    if(absent) html += `<span>欠 <b>${absent}</b></span>`;
+    $("stats").innerHTML = html;
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+  let toastTimer;
+  function toast(msg){
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // ---------- 入力 ----------
+  function nextFrom(i){
+    const t = T(); let j = i + 1;
+    if(store.skip) while(j <= t.n && t.scores[j]) j++;
+    return j;
+  }
+  function enter(val, absent){
+    const t = T();
+    if(t.cur > t.n){ toast("最後まで入力済みです。直す番号のマス目を押してください"); return; }
+    const no = t.cur;
+    const prev = t.scores[no] || null;
+    const next = absent ? {v:"欠", a:true} : {v:val, a:false};
+    history.push({test:store.current, no, prev, cur:no});
+    if(history.length > 300) history.shift();
+    t.scores[no] = next;
+    t.cur = nextFrom(no);
+    save(); paintCell(no, true); renderCursor(); updateStats();
+  }
+  function clearCell(){
+    const t = T(); const no = t.cur;
+    if(no > t.n || !t.scores[no]) return;
+    history.push({test:store.current, no, prev:t.scores[no], cur:no});
+    delete t.scores[no]; save(); paintCell(no, true); renderCursor(); updateStats();
+  }
+  function undo(){
+    const h = history.pop();
+    if(!h){ toast("戻せる入力がありません"); return; }
+    const ht = store.tests[h.test];
+    if(!ht) return undo();
+    if(h.prev) ht.scores[h.no] = h.prev; else delete ht.scores[h.no];
+    ht.cur = h.cur;
+    if(h.test !== store.current){ store.current = h.test; renderAll(); }
+    save(); paintCell(h.no, true); renderCursor(); updateStats();
+    toast(`${h.no}番を戻しました（${label(h.prev)}）`);
+  }
+  function move(d){
+    const t = T(); t.cur = Math.max(1, Math.min(t.n + 1, t.cur + d)); save(); renderCursor();
+  }
+
+  $("absentBtn").addEventListener("click", () => enter(null, true));
+  $("clearCellBtn").addEventListener("click", clearCell);
+  $("undoBtn").addEventListener("click", undo);
+  $("prevBtn").addEventListener("click", () => move(-1));
+  $("nextBtn").addEventListener("click", () => move(1));
+  $("skipOpt").addEventListener("change", e => { store.skip = e.target.checked; save(); });
+  $("numOpt").addEventListener("change", e => { T().copyNum = e.target.checked; save(); });
+
+  // ---------- キーボード（PC用） ----------
+  const GKEYS = {q:"A+",w:"A",e:"A-",a:"B+",s:"B",d:"B-",z:"C+",x:"C",c:"C-","1":"D+","2":"D","3":"D-"};
+  let digitBuf = "", digitTimer;
+  document.addEventListener("keydown", e => {
+    if(e.target.matches("input[type=text],input[type=number],select,textarea")) return;
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if(k === "backspace"){ e.preventDefault(); undo(); return; }
+    if(k === "arrowleft"){ e.preventDefault(); move(-1); return; }
+    if(k === "arrowright"){ e.preventDefault(); move(1); return; }
+    if(k === "k"){ e.preventDefault(); enter(null, true); return; }
+    if(isGrade()){
+      if(GKEYS[k]){ e.preventDefault(); enter(GKEYS[k], false); }
+      return;
+    }
+    if(/^[0-9]$/.test(k)){
+      e.preventDefault();
+      clearTimeout(digitTimer);
+      const max = T().max;
+      digitBuf += k;
+      const v = Number(digitBuf);
+      // これ以上桁を足すと満点を超えるなら即確定
+      if(v * 10 > max || digitBuf.length >= String(max).length){
+        digitBuf = "";
+        if(v <= max) enter(v, false); else toast(`${v}点は満点を超えています`);
+      }else{
+        digitTimer = setTimeout(() => { const x = Number(digitBuf); digitBuf = ""; enter(x, false); }, 600);
+      }
+    }
+  });
+
+  // ---------- コピー ----------
+  $("copyBtn").addEventListener("click", async () => {
+    const t = T(); const lines = [];
+    for(let i=1;i<=t.n;i++){
+      const s = t.scores[i];
+      if(!s) lines.push("");
+      else if(s.a) lines.push("欠");
+      else if(isGrade() && t.copyNum) lines.push(String(gradeNum(s.v)));
+      else lines.push(String(s.v));
+    }
+    const text = lines.join("\n");
+    try{
+      await navigator.clipboard.writeText(text);
+      $("copyFallback").style.display = "none";
+      toast(`${t.n}人分をコピーしました。Excelの1番のセルに貼り付けてください`);
+    }catch(e){
+      $("copyText").value = text; $("copyFallback").style.display = "block";
+      $("copyText").focus(); $("copyText").select();
+    }
+  });
+
+  let armTimer;
+  $("clearBtn").addEventListener("click", () => {
+    const b = $("clearBtn");
+    if(!b.classList.contains("armed")){
+      b.classList.add("armed"); b.textContent = "本当に消す？";
+      clearTimeout(armTimer);
+      armTimer = setTimeout(() => { b.classList.remove("armed"); b.textContent = "全消去"; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer); b.classList.remove("armed"); b.textContent = "全消去";
+    T().scores = {}; T().cur = 1; history = history.filter(h => h.test !== store.current);
+    save(); renderGrid(); toast("このテストの入力を消しました");
+  });
+
+  // ---------- テストの管理 ----------
+  function renderAll(){ renderBar(); renderKeys(); renderGrid(); }
+  $("testSel").addEventListener("change", e => { store.current = e.target.value; save(); renderAll(); });
+  $("modeSel").addEventListener("change", e => {
+    const t = T();
+    if(Object.keys(t.scores).length){
+      toast("入力済みのテストは種類を変えられません。＋新規で作るか、全消去してください");
+      $("modeSel").value = t.mode; return;
+    }
+    t.mode = e.target.value; save(); renderAll();
+  });
+  $("nInput").addEventListener("change", e => {
+    T().n = Math.max(1, Math.min(60, parseInt(e.target.value,10) || 40)); save(); renderAll();
+  });
+  $("maxInput").addEventListener("change", e => {
+    const v = Math.max(1, Math.min(20, parseInt(e.target.value,10) || 10));
+    const over = Object.values(T().scores).some(s => !s.a && s.v > v);
+    if(over){ toast(`${v}点を超える点数が入っているので変えられません`); $("maxInput").value = T().max; return; }
+    T().max = v; save(); renderAll();
+  });
+
+  let nameMode = null;
+  function openName(mode){
+    nameMode = mode; $("nameBox").classList.add("show");
+    $("nameInput").value = mode === "rename" ? store.current : "";
+    $("nameInput").focus();
+  }
+  $("newBtn").addEventListener("click", () => openName("new"));
+  $("renameBtn").addEventListener("click", () => openName("rename"));
+  $("nameCancel").addEventListener("click", () => $("nameBox").classList.remove("show"));
+  $("nameInput").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); $("nameOk").click(); } });
+  $("nameOk").addEventListener("click", () => {
+    const name = $("nameInput").value.trim();
+    if(!name){ toast("名前を入れてください"); return; }
+    if(store.tests[name] && !(nameMode === "rename" && name === store.current)){ toast("同じ名前があります"); return; }
+    if(nameMode === "new"){
+      const t = T();
+      store.tests[name] = {mode:t.mode, max:t.max, n:t.n, cur:1, copyNum:!!t.copyNum, scores:{}};
+    }else if(name !== store.current){
+      store.tests[name] = store.tests[store.current]; delete store.tests[store.current];
+      history.forEach(h => { if(h.test === store.current) h.test = name; });
+    }
+    store.current = name; save(); renderAll();
+    $("nameBox").classList.remove("show");
+  });
+
+  // ---------- 起動 ----------
+  load(); renderAll();
+})();
+</script>
+
+</body>
+</html>

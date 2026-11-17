@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>音声点数入力</title>
+<style>
+  :root{
+    --bg:#f6f5f1; --card:#fff; --ink:#1f2328; --sub:#6b6f76; --line:#e2e0da;
+    --accent:#1f6f5c; --accent-soft:#e3f1ec; --warn:#b3261e; --warn-soft:#fbe9e7;
+    --flash:#fff3c4; --absent:#7a5c00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:0 0 12px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .bar label{font-size:13px;color:var(--sub)}
+  select,input[type=text],input[type=number]{font:inherit;font-size:15px;padding:6px 8px;
+    border:1px solid var(--line);border-radius:6px;background:#fff}
+  input[type=number]{width:70px}
+  button{font:inherit;font-size:14px;padding:7px 12px;border-radius:6px;border:1px solid var(--line);
+    background:#fff;cursor:pointer}
+  button:hover{background:#f0efea}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.primary:hover{filter:brightness(1.08)}
+  button.danger{color:var(--warn);border-color:#e8c4bf}
+  button.danger.armed{background:var(--warn);color:#fff}
+  .spacer{flex:1}
+  .main{display:grid;grid-template-columns:300px 1fr;gap:12px}
+  @media (max-width:760px){.main{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  #mic{width:100%;font-size:18px;padding:16px;border-radius:10px;font-weight:600}
+  #mic.on{background:var(--warn);border-color:var(--warn);color:#fff}
+  #mic:disabled{opacity:.5;cursor:not-allowed}
+  .status{font-size:13px;color:var(--sub);margin:8px 0 0;min-height:1.4em}
+  [hidden]{display:none!important}
+  .diag{margin-top:8px;border:1px solid #e8b4ae;background:var(--warn-soft);border-radius:8px;padding:10px;line-height:1.6}
+  .diag-t{font-weight:700;color:var(--warn);font-size:14px}
+  .diag-d{font-size:13px;margin-top:4px}
+  .diag-c{font-size:11.5px;color:var(--sub);margin-top:6px;font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+  .heard{margin-top:10px;font-size:14px;background:#f7f7f4;border-radius:6px;padding:8px;min-height:2.6em;
+    color:var(--sub);word-break:break-all}
+  .last{margin-top:12px;text-align:center;padding:14px 8px;border-radius:10px;background:var(--accent-soft)}
+  .last .no{font-size:15px;color:var(--sub)}
+  .last .val{font-size:44px;font-weight:700;line-height:1.1}
+  .last.err{background:var(--warn-soft)}
+  .last.err .val{font-size:18px;color:var(--warn);font-weight:600;padding:10px 0}
+  .typein{display:flex;gap:6px;margin-top:12px}
+  .typein input{flex:1;min-width:0}
+  .opts{margin-top:12px;font-size:13px;color:var(--sub);display:flex;flex-direction:column;gap:6px}
+  .help{margin-top:12px;font-size:12.5px;color:var(--sub);line-height:1.7;border-top:1px solid var(--line);padding-top:10px}
+  .help b{color:var(--ink)}
+  .gridhead{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .count{font-size:14px;color:var(--sub)}
+  .dist{display:none;flex-wrap:wrap;gap:4px;margin:-2px 0 10px;font-size:12px}
+  .dist.show{display:flex}
+  .dist span{background:#f3f2ed;border-radius:5px;padding:2px 6px;color:var(--sub)}
+  .dist span b{color:var(--ink);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  @media (max-width:500px){.grid{grid-template-columns:repeat(4,1fr)}}
+  .cell{border:1px solid var(--line);border-radius:8px;padding:4px 6px 6px;background:#fff;position:relative;
+    transition:background .6s}
+  .cell .n{font-size:12px;color:var(--sub)}
+  .cell input{width:100%;border:none;font-size:20px;font-weight:600;padding:2px 0;text-align:right;
+    background:transparent;outline:none}
+  .grade-mode .cell input{text-align:center}
+  .cell.filled{background:#fbfbf8}
+  .cell.flash{background:var(--flash);transition:none}
+  .cell .tag{position:absolute;top:4px;right:6px;font-size:11px;color:var(--absent);font-weight:700}
+  .cell:focus-within{border-color:var(--accent)}
+  .copyfallback{display:none;margin-top:10px}
+  .copyfallback textarea{width:100%;height:120px;font:inherit;font-size:13px}
+  .modal{display:none;margin-top:8px;gap:6px;align-items:center;flex-wrap:wrap}
+  .modal.show{display:flex}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;
+    padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .only-grade{display:none}
+  .grade-mode .only-grade{display:revert}
+  .grade-mode .only-score{display:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <h1>音声点数入力 <small style="font-size:12px;color:var(--sub);font-weight:400">ファイル版（Chrome / Edge）</small></h1>
+
+  <div class="bar">
+    <label for="testSel">テスト</label>
+    <select id="testSel"></select>
+    <button id="newBtn">＋新規</button>
+    <button id="renameBtn">名前変更</button>
+    <span class="spacer"></span>
+    <label for="modeSel">入力</label>
+    <select id="modeSel">
+      <option value="score">点数</option>
+      <option value="grade">12段階（A+〜D-）</option>
+    </select>
+    <label for="nInput">人数</label><input id="nInput" type="number" min="1" max="60">
+    <label for="maxInput" class="only-score">満点</label><input id="maxInput" class="only-score" type="number" min="1" max="1000">
+  </div>
+  <div class="modal" id="nameBox">
+    <input id="nameInput" type="text" placeholder="例：1年1組 2学期期末">
+    <button class="primary" id="nameOk">OK</button>
+    <button id="nameCancel">やめる</button>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <button id="mic" class="primary" disabled>🎤 音声入力を開始</button>
+      <div class="status" id="status">音声入力の準備中…</div>
+      <div class="diag" id="diag" hidden>
+        <div class="diag-t" id="diagTitle"></div>
+        <div class="diag-d" id="diagDetail"></div>
+        <div class="diag-c" id="diagCode"></div>
+      </div>
+      <div class="heard" id="heard">聞き取った言葉がここに出ます</div>
+      <div class="last" id="last"><div class="no">直前の入力</div><div class="val">—</div></div>
+
+      <div class="typein">
+        <input id="typeIn" type="text" placeholder="手入力：5 85 / 5 欠席">
+        <button id="typeGo">入力</button>
+      </div>
+
+      <div class="opts">
+        <label><input type="checkbox" id="speakOpt" checked> 入力内容を読み上げる</label>
+        <label class="only-grade"><input type="checkbox" id="numOpt"> 数値でコピー（A+=12 … D-=1）</label>
+      </div>
+
+      <div class="help only-score">
+        <b>言い方</b><br>
+        「5番、85」「12番 100点」<br>
+        「7番、欠席」→ 0点（欠マーク付き）<br>
+        「取り消し」→ 直前の入力を元に戻す<br>
+        続けて「3番70、4番65」も可。<br>
+        すでに点数がある番号は、違う点数なら上書きして知らせます。
+      </div>
+      <div class="help only-grade">
+        <b>言い方（12段階）</b><br>
+        「5番、Aプラス」「12番 Bマイナス」「3番 シー」<br>
+        エー／ビー／シー／ディー ＋ プラス／マイナス<br>
+        「7番、欠席」→ 欠（コピー時は「欠」）<br>
+        「取り消し」→ 直前の入力を元に戻す<br>
+        手入力・マス目では「a+」「b-」「c」でも入ります。
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="gridhead">
+        <span class="count" id="count"></span>
+        <span class="spacer"></span>
+        <button id="undoBtn">↶ 取り消し</button>
+        <button class="primary" id="copyBtn">点数をコピー</button>
+        <button class="danger" id="clearBtn">全消去</button>
+      </div>
+      <div class="dist" id="dist"></div>
+      <div class="grid" id="grid"></div>
+      <div class="copyfallback" id="copyFallback">
+        <div style="font-size:13px;color:var(--sub);margin-bottom:4px">自動コピーできませんでした。下を選択して Ctrl+C でコピーしてください。</div>
+        <textarea id="copyText" readonly></textarea>
+      </div>
+      <div class="help">
+        Excelで<b>1番のセル</b>を選んで貼り付けると、1番〜最後の番号まで縦に入ります（未入力は空欄。欠席は点数モードで0、12段階モードで「欠」）。<br>
+        データはこのパソコンのこのブラウザ内にだけ自動保存されます。音声認識はインターネットを使います（Chromeは Google、Edgeは Microsoft のサービス）。
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const KEY = "onsei-saiten-file:v1";
+  const $ = id => document.getElementById(id);
+  const GRADES = ["A+","A","A-","B+","B","B-","C+","C","C-","D+","D","D-"];
+  const gradeNum = g => 12 - GRADES.indexOf(g);
+  const KANA = {A:"エー",B:"ビー",C:"シー",D:"ディー"};
+  const spokenGrade = g => KANA[g[0]] + (g[1] === "+" ? "プラス" : g[1] === "-" ? "マイナス" : "");
+
+  // ---------- 保存 ----------
+  let store;
+  function blankTest(){ return {n:40, max:100, mode:"score", scores:{}}; }
+  function load(){
+    try{ store = JSON.parse(localStorage.getItem(KEY)); }catch(e){ store = null; }
+    if(!store || !store.tests || !Object.keys(store.tests).length){
+      store = {current:"テスト1", tests:{"テスト1":blankTest()}};
+    }
+    if(!store.tests[store.current]) store.current = Object.keys(store.tests)[0];
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  const T = () => store.tests[store.current];
+  const isGrade = (t = T()) => t.mode === "grade";
+  let history = [];   // {test, no, prev}
+
+  function label(s, t = T()){
+    if(!s) return "空欄";
+    if(s.a) return isGrade(t) ? "欠席" : "欠席（0点）";
+    return isGrade(t) ? s.v : `${s.v}点`;
+  }
+  function spoken(s, t = T()){
+    if(s.a) return "欠席";
+    return isGrade(t) ? spokenGrade(s.v) : `${s.v}点`;
+  }
+
+  // ---------- 表示 ----------
+  function renderTests(){
+    const sel = $("testSel"); sel.innerHTML = "";
+    Object.keys(store.tests).forEach(name => {
+      const o = document.createElement("option"); o.value = o.textContent = name;
+      if(name === store.current) o.selected = true; sel.appendChild(o);
+    });
+    $("nInput").value = T().n; $("maxInput").value = T().max;
+    $("modeSel").value = isGrade() ? "grade" : "score";
+    $("numOpt").checked = !!T().copyNum;
+    $("wrap").classList.toggle("grade-mode", isGrade());
+    $("typeIn").placeholder = isGrade() ? "手入力：5 A+ / 5 欠席" : "手入力：5 85 / 5 欠席";
+    $("copyBtn").textContent = isGrade() ? "評価をコピー" : "点数をコピー";
+  }
+  function renderGrid(){
+    const g = $("grid"); g.innerHTML = "";
+    const grade = isGrade();
+    for(let i=1;i<=T().n;i++){
+      const c = document.createElement("div"); c.className = "cell"; c.id = "c"+i;
+      c.innerHTML = `<div class="n">${i}番</div><span class="tag"></span><input inputmode="${grade ? "text" : "numeric"}" autocomplete="off" aria-label="${i}番の${grade ? "評価" : "点数"}">`;
+      const inp = c.querySelector("input");
+      inp.addEventListener("change", () => manualCell(i, inp.value));
+      inp.addEventListener("keydown", e => {
+        if(e.key === "Enter" || e.key === "ArrowDown"){ e.preventDefault(); focusCell(i+5); }
+        if(e.key === "ArrowUp"){ e.preventDefault(); focusCell(i-5); }
+      });
+      g.appendChild(c); paintCell(i);
+    }
+    updateCount();
+  }
+  function focusCell(i){ const c = $("c"+i); if(c) c.querySelector("input").focus(); }
+  function paintCell(i, flash){
+    const c = $("c"+i); if(!c) return;
+    const s = T().scores[i];
+    const inp = c.querySelector("input"), tag = c.querySelector(".tag");
+    if(document.activeElement !== inp) inp.value = s ? (s.a && isGrade() ? "" : s.v) : "";
+    tag.textContent = s && s.a ? "欠" : "";
+    c.classList.toggle("filled", !!s);
+    if(flash){
+      c.classList.add("flash");
+      c.scrollIntoView({block:"nearest", behavior:"smooth"});
+      setTimeout(() => c.classList.remove("flash"), 50);
+    }
+  }
+  function updateCount(){
+    const t = T(), n = t.n; let k = 0;
+    const tally = {}; let absent = 0;
+    for(let i=1;i<=n;i++){
+      const s = t.scores[i]; if(!s) continue; k++;
+      if(s.a) absent++; else tally[s.v] = (tally[s.v] || 0) + 1;
+    }
+    $("count").textContent = `入力済み ${k} / ${n}人`;
+    const d = $("dist");
+    if(isGrade(t)){
+      d.innerHTML = GRADES.map(g => `<span>${g} <b>${tally[g] || 0}</b></span>`).join("") +
+                    (absent ? `<span>欠 <b>${absent}</b></span>` : "");
+      d.classList.add("show");
+    }else{ d.classList.remove("show"); d.innerHTML = ""; }
+  }
+  function showLast(text, err){
+    const l = $("last");
+    l.classList.toggle("err", !!err);
+    l.innerHTML = err ? `<div class="no">聞き取りエラー</div><div class="val">${esc(text)}</div>`
+                      : `<div class="no">直前の入力</div><div class="val">${esc(text)}</div>`;
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+  let toastTimer;
+  function toast(msg){
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // ---------- 読み上げ ----------
+  function say(text){
+    if(!$("speakOpt").checked) return;
+    try{
+      const ss = window.speechSynthesis; if(!ss) return;
+      ss.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "ja-JP"; u.rate = 1.15;
+      const v = ss.getVoices().find(v => /ja/i.test(v.lang)); if(v) u.voice = v;
+      ss.speak(u);
+    }catch(e){}
+  }
+
+  // ---------- 入力の確定 ----------
+  // val: 点数モードは数値、12段階モードは "A+" などの文字列
+  function setScore(no, val, absent, source){
+    const t = T();
+    if(!Number.isInteger(no) || no < 1 || no > t.n){
+      showLast(`${no}番は名簿にありません`, true); say(`${no}番は、ありません`); return false;
+    }
+    if(!absent){
+      if(isGrade(t)){
+        if(!GRADES.includes(val)){ showLast(`${no}番 「${val}」は評価にありません`, true); say("評価が、わかりませんでした"); return false; }
+      }else if(val < 0 || val > t.max){
+        showLast(`${no}番 ${val}点は範囲外です`, true); say(`${val}点は、範囲外です`); return false;
+      }
+    }
+    const prev = t.scores[no] || null;
+    const next = {v: absent ? (isGrade(t) ? "欠" : 0) : val, a: !!absent};
+    // 同じ値の再入力（読み上げの拾い直しなど）は何もしない
+    if(prev && prev.v === next.v && prev.a === next.a){
+      if(source === "type") toast(`${no}番は既に ${label(next)} です`);
+      return true;
+    }
+    history.push({test: store.current, no, prev});
+    if(history.length > 200) history.shift();
+    t.scores[no] = next; save();
+    paintCell(no, true); updateCount();
+    showLast(`${no}番　${label(next)}`);
+    say(prev ? `${no}番、上書き、${spoken(next)}` : `${no}番、${spoken(next)}`);
+    return true;
+  }
+  function manualCell(no, raw){
+    raw = toHalf(raw).trim();
+    const t = T(); const prev = t.scores[no] || null;
+    if(raw === ""){
+      if(prev){ history.push({test:store.current, no, prev}); delete t.scores[no]; save(); }
+      paintCell(no); updateCount(); return;
+    }
+    if(/^(欠|欠席|k|K)$/.test(raw)){ setScore(no, 0, true, "cell"); return; }
+    if(isGrade(t)){
+      const g = gradeWords(raw).replace(/\s/g, "");
+      if(!GRADES.includes(g)){ toast("A+〜D- で入れてください"); paintCell(no); return; }
+      if(!setScore(no, g, false, "cell")) paintCell(no);
+      return;
+    }
+    const v = Number(raw);
+    if(!Number.isFinite(v)){ toast("数字を入れてください"); paintCell(no); return; }
+    if(!setScore(no, v, false, "cell")) paintCell(no);
+  }
+  function undo(){
+    const h = history.pop();
+    if(!h){ toast("戻せる入力がありません"); return; }
+    if(!store.tests[h.test]){ return undo(); }
+    const ht = store.tests[h.test];
+    if(h.prev) ht.scores[h.no] = h.prev; else delete ht.scores[h.no];
+    save();
+    if(h.test !== store.current){ store.current = h.test; renderTests(); renderGrid(); }
+    paintCell(h.no, true); updateCount();
+    showLast(`${h.no}番を戻しました（${label(h.prev, ht)}）`);
+    say(`${h.no}番を、戻しました`);
+  }
+
+  // ---------- 聞き取り結果の解析 ----------
+  function toHalf(s){
+    return s.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+            .replace(/[　]/g, " ");
+  }
+  const KD = {"〇":0,"零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9};
+  function kanjiNum(s){
+    if(/^[〇零一二三四五六七八九]+$/.test(s) && s.length > 1 && !/[十百]/.test(s)){
+      return Number([...s].map(c => KD[c]).join(""));
+    }
+    let total = 0, cur = 0;
+    for(const c of s){
+      if(c in KD) cur = KD[c];
+      else if(c === "百"){ total += (cur || 1) * 100; cur = 0; }
+      else if(c === "十"){ total += (cur || 1) * 10; cur = 0; }
+    }
+    return total + cur;
+  }
+  function normalize(text){
+    let s = toHalf(text);
+    s = s.replace(/[〇零一二三四五六七八九十百]+/g, m => String(kanjiNum(m)));
+    s = s.replace(/[、,，。．.・!！?？]/g, " ");
+    s = s.replace(/けっせき|欠勤|休み|やすみ/g, "欠席");
+    s = s.replace(/ばん|バン/g, "番");
+    return s.replace(/\s+/g, " ").trim();
+  }
+  // 「エープラス」「Bまいなす」「c」などを "A+" "B-" "C" の形にそろえる
+  function gradeWords(s){
+    s = s.replace(/エー|えー|エイ|えい|ええ/g, "A")
+         .replace(/ビー|びー|ビ|び/g, "B")
+         .replace(/シー|しー/g, "C")
+         .replace(/ディー|でぃー|ディ|でぃ|デー|でー/g, "D");
+    s = s.replace(/[a-d]/g, c => c.toUpperCase());
+    s = s.replace(/プラス|ぷらす|＋/g, "+")
+         .replace(/マイナス|まいなす|[−－‐–—ー]/g, "-");
+    s = s.replace(/([A-D])\s*([+\-])/g, "$1$2");
+    return s;
+  }
+  function handleText(raw, source){
+    let s = normalize(raw);
+    if(!s) return;
+    if(/取り?消|とりけし|取消し|元に戻/.test(s)){ undo(); return; }
+    const grade = isGrade();
+    if(grade) s = gradeWords(s);
+    const VAL = grade ? "(欠席|[A-D][+\\-]?)(?![A-Za-z])" : "(欠席|\\d{1,4})\\s*点?";
+    const apply = (no, v) => {
+      if(v === "欠席") setScore(no, 0, true, source);
+      else setScore(no, grade ? v : Number(v), false, source);
+    };
+    let hit = false;
+    const re = new RegExp("(\\d{1,2})\\s*番\\s*(?:は|が|の|さん)?\\s*" + VAL, "g");
+    let m;
+    while((m = re.exec(s))){ hit = true; apply(Number(m[1]), m[2]); }
+    if(hit) return;
+    // 「番」が抜けたとき：「5 85」「5 A+」「5 欠席」
+    const m2 = s.match(new RegExp("^(\\d{1,2})\\s*" + VAL + "$"));
+    if(m2){ apply(Number(m2[1]), m2[2]); return; }
+    if(/\d/.test(s)){
+      showLast(`「${raw}」は番号と${grade ? "評価" : "点数"}に分けられませんでした`, true);
+      say("もう一度お願いします");
+    }
+  }
+
+  // ---------- 音声入力（ブラウザの音声認識：Chrome / Edge） ----------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false, wantListen = false, fatal = false;
+  function setMicUI(){
+    const b = $("mic");
+    b.classList.toggle("on", wantListen);
+    b.textContent = wantListen ? "■ 音声入力を停止" : "🎤 音声入力を開始";
+  }
+  const REASONS = {
+    "not-allowed":        ["マイクが許可されていません",
+      "マイクの確認で「ブロック」を選んだか、ブラウザ・Windowsの設定でマイクが止められています。アドレスバー左のマーク→マイクを「許可」にして再読み込みし、Windowsの「設定→プライバシーとセキュリティ→マイク」でデスクトップアプリのマイクがオンかも確認してください。"],
+    "service-not-allowed":["このブラウザでは音声認識が止められています",
+      "学校の管理設定などで音声認識の機能が無効になっています。別のブラウザ（Chrome ⇔ Edge）で試すか、手入力を使ってください。"],
+    "audio-capture":      ["マイクから音が取れません",
+      "マイクがつながっていないか、Teams・Zoomなど他のアプリがマイクを使っています。マイクの接続と、他のアプリを閉じてから試してください。"],
+    "network":            ["音声認識サーバーに接続できません",
+      "この音声認識はインターネットを使います。ネット接続を確認してください。学校のネットワークでGoogle（Chrome）やMicrosoft（Edge）の音声サービスが止められている場合もあります。"],
+    "language-not-supported":["日本語の音声認識に対応していません", "Chrome か Edge の最新版で開いてください。"],
+    "bad-grammar":        ["音声認識の設定エラーです", "この表示を作成者に伝えてください。"],
+    "aborted":            ["音声認識が中断されました", "もう一度ボタンを押してください。"],
+    "no-support":         ["このブラウザは音声認識に対応していません",
+      "Windows・Mac の Chrome か Edge で開いてください（Firefox・Safari・一部のスマホでは使えません）。手入力は使えます。"],
+    "start-failed":       ["音声認識を開始できませんでした", "ページを再読み込みしてから、もう一度押してください。"]
+  };
+  function browserName(){
+    const ua = navigator.userAgent;
+    const m = ua.match(/Edg\/(\d+)/) ? "Edge " + ua.match(/Edg\/(\d+)/)[1]
+            : ua.match(/Chrome\/(\d+)/) ? "Chrome " + ua.match(/Chrome\/(\d+)/)[1]
+            : ua.match(/Firefox\/(\d+)/) ? "Firefox " + ua.match(/Firefox\/(\d+)/)[1]
+            : /Safari\//.test(ua) ? "Safari" : "不明";
+    const os = /Windows/.test(ua) ? "Windows" : /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android"
+             : /CrOS/.test(ua) ? "ChromeOS" : /Mac/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "不明";
+    return `${os} / ${m}`;
+  }
+  function showReason(code, extra){
+    const r = REASONS[code] || ["音声認識でエラーが起きました", "もう一度押してください。続く場合は下のコードを作成者に伝えてください。"];
+    const now = new Date();
+    const t = `${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`;
+    $("diag").hidden = false;
+    $("diagTitle").textContent = r[0];
+    $("diagDetail").textContent = r[1] + (extra ? " " + extra : "");
+    $("diagCode").textContent = `理由コード：${code}　環境：${browserName()}　ネット：${navigator.onLine ? "つながっている" : "つながっていない"}　時刻：${t}`;
+    $("status").textContent = "音声入力が止まりました（理由は下の赤い枠）。手入力は使えます。";
+  }
+  function hideDiag(){ $("diag").hidden = true; }
+
+  function initSpeech(){
+    if(!SR){ showReason("no-support"); $("status").textContent = "このブラウザでは音声入力が使えません。手入力は使えます。"; return; }
+    rec = new SR();
+    rec.lang = "ja-JP"; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onstart = () => {
+      listening = true; hideDiag();
+      $("status").textContent = isGrade() ? "聞き取り中…「5番、Aプラス」のように話してください" : "聞き取り中…「5番、85」のように話してください";
+    };
+    rec.onresult = e => {
+      let interim = "";
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const r = e.results[i], text = r[0].transcript;
+        if(r.isFinal){ $("heard").textContent = text; handleText(text, "voice"); }
+        else interim += text;
+      }
+      if(interim) $("heard").textContent = interim;
+    };
+    rec.onerror = e => {
+      // 無音（no-speech）は自動で聞き直すので表示しない
+      if(e.error === "no-speech") return;
+      if(e.error === "aborted" && !wantListen) return;
+      if(["not-allowed","service-not-allowed","audio-capture","network","language-not-supported","bad-grammar"].includes(e.error)){
+        fatal = true; wantListen = false; setMicUI(); releaseMic();
+      }
+      showReason(e.error, e.message ? `（${e.message}）` : "");
+    };
+    rec.onend = () => {
+      listening = false;
+      // Chromeは無音が続いたり一定時間たつと自動で止まるので、使用中なら聞き直す
+      if(wantListen && !fatal){
+        try{ rec.start(); return; }catch(err){ wantListen = false; releaseMic(); showReason("start-failed"); }
+      }
+      setMicUI();
+      if($("diag").hidden) $("status").textContent = "停止中";
+    };
+    $("mic").disabled = false;
+    $("status").textContent = "ボタンを押して話しはじめてください（最初にマイクの許可が出ます）";
+  }
+  // マイクを1本つかみ続けておく（ファイルで開いたページは許可が記憶されないため、
+  // 音声認識が自動で止まって聞き直すたびに許可を聞かれるのを防ぐ）
+  let micStream = null;
+  function releaseMic(){ if(micStream){ micStream.getTracks().forEach(t => t.stop()); micStream = null; } }
+  function startRec(){
+    try{ rec.start(); }
+    catch(err){
+      if(!(err && err.name === "InvalidStateError")){ wantListen = false; setMicUI(); releaseMic(); showReason("start-failed", err && err.message ? `（${err.message}）` : ""); }
+    }
+  }
+  $("mic").addEventListener("click", () => {
+    if(!rec) return;
+    if(wantListen){ wantListen = false; setMicUI(); releaseMic(); try{ rec.stop(); }catch(e){} return; }
+    hideDiag(); fatal = false; wantListen = true; setMicUI();
+    $("status").textContent = "準備中…マイクの許可が出たら「許可」を押してください";
+    try{ speechSynthesis && speechSynthesis.getVoices(); }catch(e){}
+    if(micStream || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ startRec(); return; }
+    navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+      micStream = stream;
+      if(wantListen) startRec(); else releaseMic();
+    }).catch(err => {
+      wantListen = false; setMicUI();
+      const n = err && err.name;
+      const code = n === "NotAllowedError" || n === "SecurityError" ? "not-allowed"
+                 : n === "NotFoundError" || n === "NotReadableError" || n === "OverconstrainedError" ? "audio-capture"
+                 : "start-failed";
+      showReason(code, n ? `（${n}）` : "");
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if(document.hidden && wantListen){ wantListen = false; setMicUI(); releaseMic(); try{ rec.stop(); }catch(e){} $("status").textContent = "画面を切り替えたので止めました。もう一度押してください"; }
+  });
+
+  // ---------- その他の操作 ----------
+  $("typeGo").addEventListener("click", () => { handleText($("typeIn").value, "type"); $("typeIn").value = ""; $("typeIn").focus(); });
+  $("typeIn").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); $("typeGo").click(); } });
+  $("undoBtn").addEventListener("click", undo);
+
+  function copyLines(t){
+    const lines = [];
+    for(let i=1;i<=t.n;i++){
+      const s = t.scores[i];
+      if(!s){ lines.push(""); continue; }
+      if(isGrade(t)) lines.push(s.a ? "欠" : (t.copyNum ? String(gradeNum(s.v)) : s.v));
+      else lines.push(String(s.v));
+    }
+    return lines.join("\n");
+  }
+  $("copyBtn").addEventListener("click", async () => {
+    const t = T(); const text = copyLines(t);
+    try{
+      await navigator.clipboard.writeText(text);
+      $("copyFallback").style.display = "none";
+      toast(`${t.n}人分をコピーしました。Excelの1番のセルに貼り付けてください`);
+    }catch(e){
+      $("copyText").value = text; $("copyFallback").style.display = "block";
+      $("copyText").focus(); $("copyText").select();
+    }
+  });
+  $("numOpt").addEventListener("change", e => { T().copyNum = e.target.checked; save(); });
+
+  let armTimer;
+  $("clearBtn").addEventListener("click", () => {
+    const b = $("clearBtn");
+    if(!b.classList.contains("armed")){
+      b.classList.add("armed"); b.textContent = "本当に消す？";
+      clearTimeout(armTimer);
+      armTimer = setTimeout(() => { b.classList.remove("armed"); b.textContent = "全消去"; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer); b.classList.remove("armed"); b.textContent = "全消去";
+    T().scores = {}; history = history.filter(h => h.test !== store.current);
+    save(); renderGrid(); showLast("—"); toast("このテストの入力を消しました");
+  });
+
+  $("testSel").addEventListener("change", e => { store.current = e.target.value; save(); renderTests(); renderGrid(); showLast("—"); });
+
+  $("modeSel").addEventListener("change", e => {
+    const want = e.target.value;
+    const t = T();
+    if((t.mode || "score") === want) return;
+    if(Object.keys(t.scores).length){
+      toast("入力済みのテストは切り替えられません。＋新規で作るか、全消去してから切り替えてください");
+      $("modeSel").value = t.mode || "score"; return;
+    }
+    t.mode = want; save(); renderTests(); renderGrid(); showLast("—");
+  });
+
+  let nameMode = null;
+  function openName(mode){
+    nameMode = mode; $("nameBox").classList.add("show");
+    $("nameInput").value = mode === "rename" ? store.current : "";
+    $("nameInput").focus();
+  }
+  $("newBtn").addEventListener("click", () => openName("new"));
+  $("renameBtn").addEventListener("click", () => openName("rename"));
+  $("nameCancel").addEventListener("click", () => $("nameBox").classList.remove("show"));
+  $("nameInput").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); $("nameOk").click(); } });
+  $("nameOk").addEventListener("click", () => {
+    const name = $("nameInput").value.trim();
+    if(!name){ toast("名前を入れてください"); return; }
+    if(store.tests[name] && !(nameMode === "rename" && name === store.current)){ toast("同じ名前があります"); return; }
+    if(nameMode === "new"){
+      store.tests[name] = {n:T().n, max:T().max, mode:T().mode || "score", copyNum:!!T().copyNum, scores:{}};
+    }else if(name !== store.current){
+      store.tests[name] = store.tests[store.current]; delete store.tests[store.current];
+      history.forEach(h => { if(h.test === store.current) h.test = name; });
+    }
+    store.current = name; save(); renderTests(); renderGrid(); showLast("—");
+    $("nameBox").classList.remove("show");
+  });
+
+  $("nInput").addEventListener("change", e => {
+    const v = Math.max(1, Math.min(60, parseInt(e.target.value,10) || 40));
+    T().n = v; save(); renderTests(); renderGrid();
+  });
+  $("maxInput").addEventListener("change", e => {
+    const v = Math.max(1, Math.min(1000, parseInt(e.target.value,10) || 100));
+    T().max = v; save(); renderTests();
+  });
+
+  // ---------- 起動 ----------
+  load(); renderTests(); renderGrid(); setMicUI();
+  initSpeech();
+  // テスト用フック
+  window.__handleText = handleText;
+  window.__gradeWords = gradeWords;
+})();
+</script>
+</body>
+</html>
