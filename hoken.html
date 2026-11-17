@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>保健室 音声入力（内科問診票）</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--line:#d9dde3;--ink:#1f2933;--sub:#6b7785;--accent:#1f7a5c;--warn:#fff4cc;--cur:#e6f4ee;--red:#c0392b}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:14px 18px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;margin-right:auto}
+  button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer}
+  button:hover{background:#f0f2f5}
+  #mic{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold;min-width:150px}
+  #mic.on{background:var(--red);border-color:var(--red)}
+  main{padding:14px 18px;max-width:1200px;margin:0 auto}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .inrow{display:flex;gap:8px}
+  #txt{flex:1;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+  #heard{margin-top:8px;color:var(--sub);font-size:14px;min-height:1.4em}
+  #heard b{color:var(--ink)}
+  #msg{margin-top:4px;font-size:14px;min-height:1.2em}
+  #msg.warn{color:#9a6b00} #msg.ok{color:var(--accent)}
+  table{width:100%;border-collapse:collapse;background:var(--card);font-size:15px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+  th{background:#eef1f4;font-size:13px;color:var(--sub);position:sticky;top:0}
+  td[contenteditable]{outline:none;min-width:60px}
+  td[contenteditable]:focus{background:#eef6ff}
+  tr.cur td{background:var(--cur)}
+  td.warn{background:var(--warn)!important}
+  td.num{font-weight:bold;font-variant-numeric:tabular-nums}
+  td.del button{padding:2px 8px;font-size:12px;color:var(--sub)}
+  .idx{color:var(--sub);font-size:12px;width:34px;text-align:right}
+  details{font-size:14px;color:var(--sub)}
+  details ul{margin:6px 0 0;padding-left:20px}
+  .help{font-size:14px;color:var(--sub);line-height:1.7}
+  .help code{background:#eef1f4;padding:1px 5px;border-radius:4px;color:var(--ink)}
+  #dlg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}
+  #dlg .box{background:#fff;border-radius:12px;padding:20px;max-width:340px}
+  #dlg .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  .count{font-size:14px;color:var(--sub)}
+  [hidden]{display:none!important}
+  #diag{margin-top:8px;border:1px solid #e8b4ae;background:#fbe9e7;border-radius:8px;padding:10px;line-height:1.6}
+  #diagTitle{font-weight:bold;color:var(--red);font-size:14px}
+  #diagDetail{font-size:13px;margin-top:4px}
+  #diagCode{font-size:11.5px;color:var(--sub);margin-top:6px;font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+</style>
+</head>
+<body>
+<header>
+  <h1>保健室 音声入力（内科問診票）</h1>
+  <span class="count" id="count">0件</span>
+  <button id="mic">🎤 音声入力 開始</button>
+  <button id="copy">Excel用にコピー</button>
+  <button id="undo">最後の行を消す</button>
+  <button id="clear">全消去</button>
+</header>
+<main>
+  <div class="panel">
+    <div class="inrow">
+      <input id="txt" placeholder="手入力・Windowsの音声入力（Win+H）もここに：例）1203 11月16日 頭痛 だるい 睡眠不足" autocomplete="off">
+      <button id="send">入力</button>
+    </div>
+    <div id="heard"></div>
+    <div id="msg"></div>
+    <div id="diag" hidden><div id="diagTitle"></div><div id="diagDetail"></div><div id="diagCode"></div></div>
+  </div>
+
+  <table>
+    <thead><tr><th class="idx">#</th><th>番号</th><th>月日</th><th>症状1</th><th>症状2</th><th>症状3</th><th>原因</th><th>未分類</th><th></th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table>
+
+  <div class="panel help" style="margin-top:12px">
+    <b>使い方</b><br>
+    ・<code>4桁番号</code>を言うと新しい行になります（「1年2組3番」でも1203になります）。<br>
+    ・<code>11月16日</code>のように「月・日」をつけて言うと月日が入ります。言わなければ前の行の月日を引き継ぎます。<br>
+    ・症状・原因は用紙の言葉を順番に関係なく言うだけで、自動で振り分けられます。言わなかった項目は空欄のままです。<br>
+    ・辞書にない言葉（「その他」の中身や聞き間違い）は<b>未分類</b>に入ります。黄色のセルは確認が必要なところです。<br>
+    ・セルはクリックすると直接書き直せます。「Excel用にコピー」で、データの行だけ（見出しなし）をExcelにそのまま貼り付けられます。
+    <details style="margin-top:6px"><summary>認識できる言葉の一覧</summary><div id="dict"></div></details>
+  </div>
+</main>
+
+<div id="dlg"><div class="box"><div id="dlgText"></div><div class="btns"><button id="dlgNo">やめる</button><button id="dlgYes" style="background:var(--red);color:#fff;border-color:var(--red)">消す</button></div></div></div>
+
+<script>
+// ===== 辞書（正式名: 言い方のバリエーション） =====
+const SYMPTOMS = {
+  "だるい":["だるい","ダルい","だるさ","怠い","倦怠感"],
+  "頭痛":["頭痛","頭が痛い","頭痛い","ずつう"],
+  "腹痛":["腹痛","お腹が痛い","おなかが痛い","お腹痛い","おなか痛い","腹が痛い","ふくつう"],
+  "下痢":["下痢","げり"],
+  "吐き気":["吐き気","吐気","吐きけ","はきけ"],
+  "嘔吐":["嘔吐","おうと","吐いた"],
+  "気分不良":["気分不良","気分が悪い","気分悪い","気持ち悪い","気持ちが悪い"],
+  "寒気":["寒気","寒け","さむけ","悪寒"],
+  "のど痛":["のど痛","喉痛","喉の痛み","のどの痛み","喉が痛い","のどが痛い","のどいた","咽頭痛"],
+  "咳":["咳","せき","セキ"],
+  "鼻水":["鼻水","はなみず","鼻汁"],
+  "めまい":["めまい","目まい","眩暈","目眩"],
+  "立ちくらみ":["立ちくらみ","立ち眩み","たちくらみ","立ち暗み"],
+  "胃痛":["胃痛","胃が痛い","胃の痛み"]
+};
+const CAUSES = {
+  "睡眠不足":["睡眠不足","寝不足"],
+  "不規則な生活":["不規則な生活","不規則","生活リズム"],
+  "身体的疲労":["身体的疲労","体の疲れ","疲労","疲れ"],
+  "食生活":["食生活","食事"],
+  "便秘":["便秘"],
+  "風邪":["風邪","かぜ","カゼ"],
+  "冷え":["冷え","ひえ"],
+  "精神的ストレス":["精神的ストレス","ストレス"],
+  "激しい運動":["激しい運動","運動"],
+  "アレルギー":["アレルギー","花粉症"],
+  "熱中症":["熱中症"],
+  "貧血":["貧血"],
+  "偏頭痛":["偏頭痛","片頭痛","へんずつう"]
+};
+// 長い言い方から先に照合（「偏頭痛」を「頭痛」より先に拾うため）
+const VARIANTS = [];
+for (const [k,vs] of Object.entries(SYMPTOMS)) vs.forEach(v=>VARIANTS.push({v,k,t:"sym"}));
+for (const [k,vs] of Object.entries(CAUSES))   vs.forEach(v=>VARIANTS.push({v,k,t:"cause"}));
+VARIANTS.sort((a,b)=>b.v.length-a.v.length);
+const STOP = new Set(["その他","そのた","ほか","他","症状","原因","なし","無し","次","つぎ","えー","えっと","あの","です","でした","番","月","日","と","あと","それから"]);
+
+// ===== 状態 =====
+let rows = [];      // {num,date,sym:[],cause,etc:[]}
+let cur = -1;       // 入力中の行
+let lastDate = "";
+const LS = "hoken_voice_v1";
+function save(){ try{ localStorage.setItem(LS, JSON.stringify({rows,cur,lastDate})); }catch(e){} }
+function load(){ try{ const d=JSON.parse(localStorage.getItem(LS)||"null"); if(d){rows=d.rows||[];cur=d.cur??-1;lastDate=d.lastDate||"";} }catch(e){} }
+
+// ===== 文字の正規化 =====
+const KN = {"〇":0,"零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9};
+function kanjiNum(s){ // 99まで
+  if(!s.includes("十")) return s.split("").map(c=>KN[c]).join("");
+  const [a,b]=s.split("十"); return String((a?KN[a]:1)*10+(b?KN[b]:0));
+}
+function normalize(s){
+  s = s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/／/g,"/").replace(/　/g," ");
+  s = s.replace(/([〇零一二三四五六七八九十]+)(?=\s*[月日年組番])/g,(m)=>kanjiNum(m));
+  return s;
+}
+
+// ===== 解析：文字列 → 出来事の列（位置順） =====
+function parse(text){
+  const s = normalize(text);
+  const used = new Array(s.length).fill(false);
+  const ev = [];
+  const take = (re, fn) => { let m; re.lastIndex=0;
+    while((m=re.exec(s))){ const st=m.index, en=st+m[0].length;
+      if(used.slice(st,en).some(x=>x)) continue;
+      for(let i=st;i<en;i++) used[i]=true; ev.push({pos:st,...fn(m)}); } };
+  // 1年2組3番 → 1203
+  take(/(\d)\s*年\s*(\d)\s*組\s*(\d{1,2})\s*番?/g, m=>({t:"num",v:m[1]+m[2]+m[3].padStart(2,"0")}));
+  // 月日
+  take(/(\d{1,2})\s*月\s*(\d{1,2})\s*日?/g, m=>({t:"date",v:+m[1]+"/"+ +m[2]}));
+  take(/(?<!\d)(\d{1,2})\/(\d{1,2})(?!\d)/g, m=>({t:"date",v:+m[1]+"/"+ +m[2]}));
+  // 4桁番号
+  take(/(?<!\d)(\d{4})(?!\d)\s*番?/g, m=>({t:"num",v:m[1]}));
+  // 辞書
+  for(const d of VARIANTS){ let from=0, i;
+    while((i=s.indexOf(d.v,from))>=0){ const en=i+d.v.length;
+      if(!used.slice(i,en).some(x=>x)){ for(let j=i;j<en;j++) used[j]=true; ev.push({pos:i,t:d.t,v:d.k}); }
+      from=i+1; } }
+  // 残り → 未分類
+  const masked = s.split("").map((c,i)=>used[i]?"\u0000":c).join("");
+  const re=/[^\u0000\s、。，,．.・\/]+/g; let m;
+  while((m=re.exec(masked))){
+    let w=m[0].replace(/^[とがはをにでものや]+|[とがはをにでものや]+$/g,"").replace(/(です|でした|ます)$/,"");
+    if(w.length<2 || STOP.has(w) || /^\d+$/.test(w)) continue;
+    ev.push({pos:m.index,t:"etc",v:w});
+  }
+  return ev.sort((a,b)=>a.pos-b.pos);
+}
+
+// ===== 出来事を表に反映 =====
+function newRow(num){ rows.push({num,date:lastDate,sym:[],cause:"",etc:[]}); cur=rows.length-1; }
+function apply(ev){
+  const notes=[];
+  for(const e of ev){
+    if(e.t==="num"){ newRow(e.v); continue; }
+    if(cur<0){ newRow(""); notes.push("番号がないまま入力されました（番号欄が黄色）"); }
+    const r=rows[cur];
+    if(e.t==="date"){ r.date=e.v; lastDate=e.v; }
+    else if(e.t==="sym"){
+      if(r.sym.includes(e.v)) continue;
+      if(r.sym.length<3) r.sym.push(e.v); else { r.etc.push("症状:"+e.v); notes.push("症状が4つ以上あったので「"+e.v+"」は未分類へ"); }
+    }
+    else if(e.t==="cause"){
+      if(r.cause===e.v) continue;
+      if(!r.cause) r.cause=e.v; else { r.etc.push("原因:"+e.v); notes.push("原因が2つ以上あったので「"+e.v+"」は未分類へ"); }
+    }
+    else if(e.t==="etc"){ r.etc.push(e.v); notes.push("辞書にない言葉「"+e.v+"」は未分類へ"); }
+  }
+  return notes;
+}
+function input(text){
+  text=text.trim(); if(!text) return;
+  document.getElementById("heard").innerHTML="聞き取り：<b>"+esc(text)+"</b>";
+  const notes=apply(parse(text));
+  showMsg(notes.length?notes.join(" ／ "):"入力しました", notes.length?"warn":"ok");
+  render(); save();
+}
+
+// ===== 表示 =====
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function showMsg(t,cls){const m=document.getElementById("msg");m.textContent=t;m.className=cls||"";}
+function render(){
+  const tb=document.getElementById("tb"); tb.innerHTML="";
+  rows.forEach((r,i)=>{
+    const tr=document.createElement("tr"); if(i===cur) tr.className="cur";
+    const cells=[
+      ["num",r.num, !/^\d{4}$/.test(r.num)],
+      ["date",r.date, !r.date],
+      ["s0",r.sym[0]||"",false],["s1",r.sym[1]||"",false],["s2",r.sym[2]||"",false],
+      ["cause",r.cause,false],
+      ["etc",r.etc.join("、"), r.etc.length>0]
+    ];
+    tr.innerHTML='<td class="idx">'+(i+1)+'</td>'+cells.map(([k,v,w])=>
+      '<td contenteditable data-i="'+i+'" data-k="'+k+'" class="'+(k==="num"?"num ":"")+(w?"warn":"")+'">'+esc(v)+'</td>').join("")
+      +'<td class="del"><button data-del="'+i+'">削除</button></td>';
+    tb.appendChild(tr);
+  });
+  document.getElementById("count").textContent=rows.length+"件";
+  const last=tb.lastElementChild; if(last) last.scrollIntoView({block:"nearest"});
+}
+// セルの手直し
+document.getElementById("tb").addEventListener("blur",e=>{
+  const td=e.target; if(!td.dataset||td.dataset.k===undefined) return;
+  const r=rows[+td.dataset.i], v=td.textContent.trim(), k=td.dataset.k;
+  if(k==="num") r.num=v; else if(k==="date") r.date=v;
+  else if(k[0]==="s"){ r.sym[+k[1]]=v; r.sym=[0,1,2].map(j=>r.sym[j]||""); r.sym=r.sym.filter((x,j)=>x||r.sym.slice(j+1).some(Boolean)); while(r.sym.length&&!r.sym[r.sym.length-1]) r.sym.pop(); }
+  else if(k==="cause") r.cause=v;
+  else if(k==="etc") r.etc=v?v.split(/[、,]/).map(x=>x.trim()).filter(Boolean):[];
+  save(); render();
+},true);
+document.getElementById("tb").addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.target.isContentEditable){e.preventDefault();e.target.blur();} });
+document.getElementById("tb").addEventListener("click",e=>{
+  const d=e.target.dataset&&e.target.dataset.del; if(d===undefined) return;
+  rows.splice(+d,1); cur=Math.min(cur,rows.length-1); save(); render();
+});
+
+// ===== ボタン =====
+document.getElementById("send").onclick=()=>{const t=document.getElementById("txt");input(t.value);t.value="";t.focus();};
+document.getElementById("txt").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing){ document.getElementById("send").click(); } });
+document.getElementById("undo").onclick=()=>{ if(!rows.length) return; rows.pop(); cur=rows.length-1; save(); render(); showMsg("最後の行を消しました","ok"); };
+document.getElementById("clear").onclick=()=>ask("表をすべて消します。よろしいですか？（先にExcelへコピーしておくと安心です）",()=>{rows=[];cur=-1;lastDate="";save();render();showMsg("全消去しました","ok");});
+document.getElementById("copy").onclick=async()=>{
+  const tsv=rows.map(r=>[r.num,r.date,r.sym[0]||"",r.sym[1]||"",r.sym[2]||"",r.cause,r.etc.join("、")].join("\t")).join("\n");
+  try{ await navigator.clipboard.writeText(tsv); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=tsv; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  showMsg(rows.length+"件をコピーしました。Excelの貼り付けたい行の先頭セルに貼り付けてください","ok");
+};
+function ask(text,yes){ const d=document.getElementById("dlg"); document.getElementById("dlgText").textContent=text; d.style.display="flex";
+  document.getElementById("dlgNo").onclick=()=>d.style.display="none";
+  document.getElementById("dlgYes").onclick=()=>{d.style.display="none";yes();}; }
+
+// ===== 音声認識（Chrome / Edge） =====
+const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null, listening=false, fatal=false, micStream=null;
+const micBtn=document.getElementById("mic");
+const REASONS = {
+  "not-allowed":["マイクが許可されていません","マイクの確認で「ブロック」を選んだか、ブラウザ・Windowsの設定でマイクが止められています。アドレスバー左のマーク→マイクを「許可」にして再読み込みし、Windowsの「設定→プライバシーとセキュリティ→マイク」でデスクトップアプリのマイクがオンかも確認してください。"],
+  "service-not-allowed":["このブラウザでは音声認識が止められています","学校の管理設定などで音声認識が無効になっています。別のブラウザ（Chrome ⇔ Edge）で試すか、入力欄への手入力・Win+Hを使ってください。"],
+  "audio-capture":["マイクから音が取れません","マイクがつながっていないか、Teams・Zoomなど他のアプリがマイクを使っています。接続を確認し、他のアプリを閉じてから試してください。"],
+  "network":["音声認識サーバーに接続できません","この音声認識はインターネットを使います。ネット接続を確認してください。学校のネットワークでGoogle（Chrome）やMicrosoft（Edge）の音声サービスが止められている場合もあります。"],
+  "language-not-supported":["日本語の音声認識に対応していません","Chrome か Edge の最新版で開いてください。"],
+  "aborted":["音声認識が中断されました","もう一度ボタンを押してください。"],
+  "no-support":["このブラウザは音声認識に対応していません","Windows・Mac の Chrome か Edge で開いてください。入力欄への手入力やWindowsの音声入力（Win+H）は使えます。"],
+  "start-failed":["音声認識を開始できませんでした","ページを再読み込みしてから、もう一度押してください。"]
+};
+function browserName(){
+  const ua=navigator.userAgent;
+  const b=ua.match(/Edg\/(\d+)/)?"Edge "+ua.match(/Edg\/(\d+)/)[1]:ua.match(/Chrome\/(\d+)/)?"Chrome "+ua.match(/Chrome\/(\d+)/)[1]:ua.match(/Firefox\/(\d+)/)?"Firefox "+ua.match(/Firefox\/(\d+)/)[1]:/Safari\//.test(ua)?"Safari":"不明";
+  const os=/Windows/.test(ua)?"Windows":/iPhone|iPad/.test(ua)?"iOS":/Android/.test(ua)?"Android":/CrOS/.test(ua)?"ChromeOS":/Mac/.test(ua)?"Mac":/Linux/.test(ua)?"Linux":"不明";
+  return os+" / "+b;
+}
+function showReason(code,extra){
+  const r=REASONS[code]||["音声認識でエラーが起きました","もう一度押してください。続く場合は下のコードを作成者に伝えてください。"];
+  const n=new Date(), t=n.getHours()+":"+String(n.getMinutes()).padStart(2,"0");
+  document.getElementById("diag").hidden=false;
+  document.getElementById("diagTitle").textContent=r[0];
+  document.getElementById("diagDetail").textContent=r[1]+(extra?" "+extra:"");
+  document.getElementById("diagCode").textContent="理由コード："+code+"　環境："+browserName()+"　ネット："+(navigator.onLine?"つながっている":"つながっていない")+"　時刻："+t;
+  showMsg("音声入力が止まりました（理由は下の赤い枠）。手入力は使えます","warn");
+}
+function hideDiag(){ document.getElementById("diag").hidden=true; }
+// マイクを停止まで握っておく（ファイルで開いたときに、自動の聞き直しのたびに許可を聞かれるのを防ぐ）
+function releaseMic(){ if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; } }
+function stopListening(){ listening=false; setMic(); releaseMic(); try{rec.stop();}catch(e){} }
+function startRec(){
+  try{ rec.start(); }
+  catch(err){ if(!(err&&err.name==="InvalidStateError")){ listening=false; setMic(); releaseMic(); showReason("start-failed",err&&err.message?"（"+err.message+"）":""); } }
+}
+if(!SR){ micBtn.disabled=true; micBtn.textContent="🎤 このブラウザは非対応"; showReason("no-support"); }
+else{
+  rec=new SR(); rec.lang="ja-JP"; rec.continuous=true; rec.interimResults=true;
+  rec.onstart=()=>{ hideDiag(); };
+  rec.onresult=e=>{
+    let interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) input(r[0].transcript); else interim+=r[0].transcript;
+    }
+    if(interim) document.getElementById("heard").innerHTML="聞き取り中：<b>"+esc(interim)+"</b>";
+  };
+  rec.onerror=e=>{
+    if(e.error==="no-speech") return;                 // 無音は自動で聞き直す
+    if(e.error==="aborted"&&!listening) return;
+    if(["not-allowed","service-not-allowed","audio-capture","network","language-not-supported","bad-grammar"].includes(e.error)){ fatal=true; listening=false; setMic(); releaseMic(); }
+    showReason(e.error, e.message?"（"+e.message+"）":"");
+  };
+  rec.onend=()=>{ if(listening&&!fatal){ startRec(); } };   // Chromeは約1分で止まるので聞き直す
+  micBtn.onclick=()=>{
+    if(listening){ stopListening(); return; }
+    hideDiag(); fatal=false; listening=true; setMic();
+    showMsg("準備中…マイクの許可が出たら「許可」を押してください","ok");
+    if(micStream||!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){ startRec(); return; }
+    navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{
+      micStream=st; if(listening){ startRec(); showMsg("聞き取り中です","ok"); } else releaseMic();
+    }).catch(err=>{
+      listening=false; setMic();
+      const n=err&&err.name;
+      const code=(n==="NotAllowedError"||n==="SecurityError")?"not-allowed":(n==="NotFoundError"||n==="NotReadableError"||n==="OverconstrainedError")?"audio-capture":"start-failed";
+      showReason(code, n?"（"+n+"）":"");
+    });
+  };
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden&&listening){ stopListening(); showMsg("画面を切り替えたので音声入力を止めました。もう一度押してください","warn"); } });
+}
+function setMic(){ micBtn.classList.toggle("on",listening); micBtn.textContent=listening?"■ 音声入力 停止":"🎤 音声入力 開始"; }
+
+// 辞書一覧
+document.getElementById("dict").innerHTML="<b>症状</b>："+Object.keys(SYMPTOMS).join("・")+"<br><b>原因</b>："+Object.keys(CAUSES).join("・");
+
+load(); render();
+</script>
+</body>
+</html>
