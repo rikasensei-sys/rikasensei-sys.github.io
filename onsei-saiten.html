@@ -132,6 +132,7 @@
       <div class="help only-score">
         <b>言い方</b><br>
         「5番、85」「12番 100点」<br>
+        小数は「5番、8.5」「5番 8点5（はってんご）」<br>
         「7番、欠席」→ 0点（欠マーク付き）<br>
         「取り消し」→ 直前の入力を元に戻す<br>
         続けて「3番70、4番65」も可。<br>
@@ -201,7 +202,7 @@
   }
   function spoken(s, t = T()){
     if(s.a) return "欠席";
-    return isGrade(t) ? spokenGrade(s.v) : `${s.v}点`;
+    return isGrade(t) ? spokenGrade(s.v) : `${String(s.v).replace(".", "てん")}点`;
   }
 
   // ---------- 表示 ----------
@@ -215,7 +216,7 @@
     $("modeSel").value = isGrade() ? "grade" : "score";
     $("numOpt").checked = !!T().copyNum;
     $("wrap").classList.toggle("grade-mode", isGrade());
-    $("typeIn").placeholder = isGrade() ? "手入力：5 A+ / 5 欠席" : "手入力：5 85 / 5 欠席";
+    $("typeIn").placeholder = isGrade() ? "手入力：5 A+ / 5 欠席" : "手入力：5 85 / 5 8.5 / 5 欠席";
     $("copyBtn").textContent = isGrade() ? "評価をコピー" : "点数をコピー";
   }
   function renderGrid(){
@@ -223,7 +224,7 @@
     const grade = isGrade();
     for(let i=1;i<=T().n;i++){
       const c = document.createElement("div"); c.className = "cell"; c.id = "c"+i;
-      c.innerHTML = `<div class="n">${i}番</div><span class="tag"></span><input inputmode="${grade ? "text" : "numeric"}" autocomplete="off" aria-label="${i}番の${grade ? "評価" : "点数"}">`;
+      c.innerHTML = `<div class="n">${i}番</div><span class="tag"></span><input inputmode="${grade ? "text" : "decimal"}" autocomplete="off" aria-label="${i}番の${grade ? "評価" : "点数"}">`;
       const inp = c.querySelector("input");
       inp.addEventListener("change", () => manualCell(i, inp.value));
       inp.addEventListener("keydown", e => {
@@ -370,7 +371,11 @@
   function normalize(text){
     let s = toHalf(text);
     s = s.replace(/[〇零一二三四五六七八九十百]+/g, m => String(kanjiNum(m)));
+    s = s.replace(/てん|テン/g, "点");
+    s = s.replace(/(\d)\s*[.．](?=\d)/g, "$1\u0001");          // 8.5 の小数点を一時退避
+    s = s.replace(/(\d+)点(\d{1,2})(?!\d|\s*番)/g, "$1\u0001$2点"); // 8点5 → 8.5点（「8点5番」は除く）
     s = s.replace(/[、,，。．.・!！?？]/g, " ");
+    s = s.replace(/\u0001/g, ".");
     s = s.replace(/けっせき|欠勤|休み|やすみ/g, "欠席");
     s = s.replace(/ばん|バン/g, "番");
     return s.replace(/\s+/g, " ").trim();
@@ -393,7 +398,7 @@
     if(/取り?消|とりけし|取消し|元に戻/.test(s)){ undo(); return; }
     const grade = isGrade();
     if(grade) s = gradeWords(s);
-    const VAL = grade ? "(欠席|[A-D][+\\-]?)(?![A-Za-z])" : "(欠席|\\d{1,4})\\s*点?";
+    const VAL = grade ? "(欠席|[A-D][+\\-]?)(?![A-Za-z])" : "(欠席|\\d{1,4}(?:\\.\\d{1,2})?)\\s*点?";
     const apply = (no, v) => {
       if(v === "欠席") setScore(no, 0, true, source);
       else setScore(no, grade ? v : Number(v), false, source);
