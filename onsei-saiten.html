@@ -286,6 +286,9 @@
   }
 
   // ---------- 読み上げ ----------
+  // 読み上げた声をマイクがもう一度拾ってしまう（エコー）のを見分けるための記録
+  let lastSaid = "", lastSaidAt = 0, speakingUntil = 0;
+  const squash = t => toHalf(String(t)).replace(/[\s、,，。．.・!！?？]/g, "");
   function say(text){
     if(!$("speakOpt").checked) return;
     try{
@@ -294,9 +297,19 @@
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "ja-JP"; u.rate = 1.15;
       const v = ss.getVoices().find(v => /ja/i.test(v.lang)); if(v) u.voice = v;
+      lastSaid = text; lastSaidAt = Date.now(); speakingUntil = Date.now() + 8000;
+      u.onend = u.onerror = () => { speakingUntil = Date.now() + 1200; };
       ss.speak(u);
     }catch(e){}
   }
+  // 聞き取った文が、直前にアプリが読み上げた文そのもの（またはその一部）なら true
+  function isEcho(raw){
+    if(!lastSaid || Date.now() - lastSaidAt > 10000) return false;
+    const a = squash(raw), b = squash(lastSaid);
+    if(a.length < 2) return Date.now() < speakingUntil;
+    return b.includes(a) || a.includes(b) || /お願いします|聞き取れません|ありません|範囲外|戻しました|上書き|設定です/.test(raw);
+  }
+  let lastErrSaid = 0;
 
   // ---------- 入力の確定 ----------
   // val: 点数モードは数値、12段階モードは "A+" などの文字列
@@ -410,6 +423,10 @@
     return s;
   }
   function handleText(raw, source){
+    if(source === "voice" && isEcho(raw)){
+      $("heard").textContent = `（読み上げの声を拾ったので無視しました：${raw}）`;
+      return;
+    }
     if(!isGrade() && !T().dec && /\d\s*[.．]\s*\d/.test(toHalf(raw))){
       showLast("小数は使わない設定です。「小数を使う」をオンにしてください", true);
       say("小数は、使わない設定です"); return;
@@ -434,7 +451,8 @@
     if(m2){ apply(Number(m2[1]), m2[2]); return; }
     if(/\d/.test(s)){
       showLast(`「${raw}」は番号と${grade ? "評価" : "点数"}に分けられませんでした`, true);
-      say("もう一度お願いします");
+      // 続けて何度も同じ声を出さない（6秒に1回まで）
+      if(Date.now() - lastErrSaid > 6000){ lastErrSaid = Date.now(); say("聞き取れませんでした"); }
     }
   }
 
