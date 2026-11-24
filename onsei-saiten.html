@@ -126,13 +126,15 @@
 
       <div class="opts">
         <label><input type="checkbox" id="speakOpt" checked> 入力内容を読み上げる</label>
+        <label class="only-score"><input type="checkbox" id="decOpt"> 小数を使う（8.5点など）</label>
         <label class="only-grade"><input type="checkbox" id="numOpt"> 数値でコピー（A+=12 … D-=1）</label>
       </div>
 
       <div class="help only-score">
         <b>言い方</b><br>
         「5番、85」「12番 100点」<br>
-        小数は「5番、8.5」「5番 8点5（はってんご）」<br>
+        小数（「小数を使う」をオン）：「5番、8.5」「5番 8点5」<br>
+        <b>ヒント：</b>「1点」など短い点数は反応しないことがあります。そのときは「<b>1点0点</b>」のように言うと入りやすくなります。<br>
         「7番、欠席」→ 0点（欠マーク付き）<br>
         「取り消し」→ 直前の入力を元に戻す<br>
         続けて「3番70、4番65」も可。<br>
@@ -164,6 +166,11 @@
       </div>
       <div class="help">
         Excelで<b>1番のセル</b>を選んで貼り付けると、1番〜最後の番号まで縦に入ります（未入力は空欄。欠席は点数モードで0、12段階モードで「欠」）。<br>
+        <details style="margin:4px 0"><summary><b>すでに入っている点数を消さずに貼るには</b></summary>
+        Excelの<b>「形式を選択して貼り付け」の「空白セルを無視する」</b>を使います。コピー元の空欄部分は貼り付けず、貼り付け先にもともと入っている値がそのまま残ります。<br>
+        ① このアプリで「コピー」 ② Excelで貼り付け先の先頭セルを選ぶ ③ 右クリック →「形式を選択して貼り付け」（Ctrl+Alt+V／Macは ⌃+⌘+V） ④「空白セルを無視する」にチェックを入れて OK<br>
+        注意：見た目が空でも、数式で "" を返しているセルやスペースが入っているセルは「空白」扱いにならず、上書きされます。その場合は一度「値」で貼り付けてから空白を整理するか、元データ側で本当の空白にしておいてください。
+        </details>
         データはこのパソコンのこのブラウザ内にだけ自動保存されます。音声認識はインターネットを使います（Chromeは Google、Edgeは Microsoft のサービス）。
       </div>
     </div>
@@ -215,6 +222,7 @@
     $("nInput").value = T().n; $("maxInput").value = T().max;
     $("modeSel").value = isGrade() ? "grade" : "score";
     $("numOpt").checked = !!T().copyNum;
+    $("decOpt").checked = !!T().dec;
     $("wrap").classList.toggle("grade-mode", isGrade());
     $("typeIn").placeholder = isGrade() ? "手入力：5 A+ / 5 欠席" : "手入力：5 85 / 5 8.5 / 5 欠席";
     $("copyBtn").textContent = isGrade() ? "評価をコピー" : "点数をコピー";
@@ -224,7 +232,7 @@
     const grade = isGrade();
     for(let i=1;i<=T().n;i++){
       const c = document.createElement("div"); c.className = "cell"; c.id = "c"+i;
-      c.innerHTML = `<div class="n">${i}番</div><span class="tag"></span><input inputmode="${grade ? "text" : "decimal"}" autocomplete="off" aria-label="${i}番の${grade ? "評価" : "点数"}">`;
+      c.innerHTML = `<div class="n">${i}番</div><span class="tag"></span><input inputmode="${grade ? "text" : (T().dec ? "decimal" : "numeric")}" autocomplete="off" aria-label="${i}番の${grade ? "評価" : "点数"}">`;
       const inp = c.querySelector("input");
       inp.addEventListener("change", () => manualCell(i, inp.value));
       inp.addEventListener("keydown", e => {
@@ -335,6 +343,7 @@
     }
     const v = Number(raw);
     if(!Number.isFinite(v)){ toast("数字を入れてください"); paintCell(no); return; }
+    if(!t.dec && !Number.isInteger(v)){ toast("小数は使わない設定です（「小数を使う」をオンにすると入ります）"); paintCell(no); return; }
     if(!setScore(no, v, false, "cell")) paintCell(no);
   }
   function undo(){
@@ -371,9 +380,17 @@
   function normalize(text){
     let s = toHalf(text);
     s = s.replace(/[〇零一二三四五六七八九十百]+/g, m => String(kanjiNum(m)));
+    // ひらがな・聞き違いの「〇点」をそろえる（「いってん」「1転」など）
+    const HIRA = {"れいてん":0,"ぜろてん":0,"いってん":1,"にてん":2,"さんてん":3,"よんてん":4,"ごてん":5,
+                  "ろくてん":6,"ななてん":7,"はってん":8,"きゅうてん":9,"じってん":10,"じゅってん":10};
+    s = s.replace(/れいてん|ぜろてん|いってん|にてん|さんてん|よんてん|ごてん|ろくてん|ななてん|はってん|きゅうてん|じゅってん|じってん/g,
+                  m => HIRA[m] + "点");
     s = s.replace(/てん|テン/g, "点");
-    s = s.replace(/(\d)\s*[.．](?=\d)/g, "$1\u0001");          // 8.5 の小数点を一時退避
-    s = s.replace(/(\d+)点(\d{1,2})(?!\d|\s*番)/g, "$1\u0001$2点"); // 8点5 → 8.5点（「8点5番」は除く）
+    s = s.replace(/(\d)\s*(?:転|天|店)/g, "$1点");
+    if(T().dec){
+      s = s.replace(/(\d)\s*[.．](?=\d)/g, "$1\u0001");          // 8.5 の小数点を一時退避
+      s = s.replace(/(\d+)点(\d{1,2})(?!\d|\s*番)/g, "$1\u0001$2点"); // 8点5 → 8.5点（「8点5番」は除く）
+    }
     s = s.replace(/[、,，。．.・!！?？]/g, " ");
     s = s.replace(/\u0001/g, ".");
     s = s.replace(/けっせき|欠勤|休み|やすみ/g, "欠席");
@@ -393,12 +410,16 @@
     return s;
   }
   function handleText(raw, source){
+    if(!isGrade() && !T().dec && /\d\s*[.．]\s*\d/.test(toHalf(raw))){
+      showLast("小数は使わない設定です。「小数を使う」をオンにしてください", true);
+      say("小数は、使わない設定です"); return;
+    }
     let s = normalize(raw);
     if(!s) return;
     if(/取り?消|とりけし|取消し|元に戻/.test(s)){ undo(); return; }
     const grade = isGrade();
     if(grade) s = gradeWords(s);
-    const VAL = grade ? "(欠席|[A-D][+\\-]?)(?![A-Za-z])" : "(欠席|\\d{1,4}(?:\\.\\d{1,2})?)\\s*点?";
+    const VAL = grade ? "(欠席|[A-D][+\\-]?)(?![A-Za-z])" : (T().dec ? "(欠席|\\d{1,4}(?:\\.\\d{1,2})?)\\s*点?" : "(欠席|\\d{1,4})\\s*点?");
     const apply = (no, v) => {
       if(v === "欠席") setScore(no, 0, true, source);
       else setScore(no, grade ? v : Number(v), false, source);
@@ -561,6 +582,10 @@
     }
   });
   $("numOpt").addEventListener("change", e => { T().copyNum = e.target.checked; save(); });
+  $("decOpt").addEventListener("change", e => {
+    T().dec = e.target.checked; save(); renderGrid();
+    toast(T().dec ? "小数を使います（例：5番 8.5）" : "小数を使いません（整数だけ）");
+  });
 
   let armTimer;
   $("clearBtn").addEventListener("click", () => {
@@ -604,7 +629,7 @@
     if(!name){ toast("名前を入れてください"); return; }
     if(store.tests[name] && !(nameMode === "rename" && name === store.current)){ toast("同じ名前があります"); return; }
     if(nameMode === "new"){
-      store.tests[name] = {n:T().n, max:T().max, mode:T().mode || "score", copyNum:!!T().copyNum, scores:{}};
+      store.tests[name] = {n:T().n, max:T().max, mode:T().mode || "score", copyNum:!!T().copyNum, dec:!!T().dec, scores:{}};
     }else if(name !== store.current){
       store.tests[name] = store.tests[store.current]; delete store.tests[store.current];
       history.forEach(h => { if(h.test === store.current) h.test = name; });
